@@ -3,4 +3,4 @@
 `make`
 
 ## Running
-`mpirun main`
+`mpirun parallel`
