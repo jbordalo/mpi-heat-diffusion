@@ -9,11 +9,13 @@ else
 
 endif
 
-all:    main
+all:    main parallel
 
 main:	src/main.c $(OBJ)
-	mpicc -o main $(CFLAGS) $< $(OBJ) $(LDFLAGS)
+	cc -o main $(CFLAGS) $< $(OBJ) $(LDFLAGS)
 
+parallel: src/parallel.c $(OBJ)
+	mpicc -o parallel $(CFLAGS) $< $(OBJ) $(LDFLAGS)
 
 clean:
-	rm -f main *.o
+	rm -f main parallel *.o
