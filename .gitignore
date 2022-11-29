@@ -1,1 +1,4 @@
-
+*.pgm
+.idea/
+main
+parallel

@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <mpi/mpi.h>
 
 #ifdef PNG
 #include "pngwriter.h"
@@ -66,7 +67,7 @@ void writeTemp(float *T, int h, int w, int n) {
 
 
 
-int main()
+int main(int argc, char *argv[])
 {
     const int nx = 100; // 200;   // Width of the area
     const int ny = 100; // 200;   // Height of the area
@@ -100,6 +101,11 @@ int main()
     // Timing
     clock_t start = clock();
 
+    int rank, size;
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD , &size);
+    MPI_Comm_rank(MPI_COMM_WORLD , &rank);
+
     // Main loop
     for (int n = 0; n <= numSteps; n++)
     {
@@ -129,13 +135,16 @@ int main()
         Tnp1 = t;
     }
 
+
     // Timing
     clock_t finish = clock();
     printf("It took %f seconds\n", (double)(finish - start) / CLOCKS_PER_SEC);
 
+    MPI_Finalize();
+
     // Release the memory
     free(Tn);
     free(Tnp1);
-    
+
     return 0;
 }
