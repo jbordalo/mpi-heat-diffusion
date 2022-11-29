@@ -64,7 +64,9 @@ void writeTemp(float *T, int h, int w, int n) {
 #endif
 }
 
-
+double timedif(struct timespec *t, struct timespec *t0) {
+    return (t->tv_sec-t0->tv_sec)+1.0e-9*(double)(t->tv_nsec-t0->tv_nsec);
+}
 
 int main()
 {
@@ -97,8 +99,10 @@ int main()
     printf("Simulated surface: %gx%g (in %dx%g divisions)\n", nx*h, ny*h, nx, h);
     writeTemp(Tn, nx, ny, 0);
 
-    // Timing
-    clock_t start = clock();
+    struct timespec t0, t;
+
+    /*start*/
+    clock_gettime(CLOCK_MONOTONIC, &t0);
 
     // Main loop
     for (int n = 0; n <= numSteps; n++)
@@ -124,14 +128,14 @@ int main()
             writeTemp(Tnp1, nx, ny, n+1);
 
         // Swapping the pointers for the next timestep
-        float* t = Tn;
+        float* temp = Tn;
         Tn = Tnp1;
-        Tnp1 = t;
+        Tnp1 = temp;
     }
 
-    // Timing
-    clock_t finish = clock();
-    printf("It took %f seconds\n", (double)(finish - start) / CLOCKS_PER_SEC);
+    /*end*/
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    printf("It took %f seconds\n", timedif(&t, &t0));
 
     // Release the memory
     free(Tn);
