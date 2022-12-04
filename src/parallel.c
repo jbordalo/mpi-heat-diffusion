@@ -14,22 +14,22 @@
 #include "pngwriter.h"
 #endif
 
+#define MASTER rank == 0
+
 /* Convert 2D index layout to unrolled 1D layout
  * \param[in] i      Row index
  * \param[in] j      Column index
  * \param[in] width  The width of the area
  * \returns An index in the unrolled 1D array.
  */
-int getIndex(const int i, const int j, const int width)
-{
-    return i*width + j;
+int getIndex(const int i, const int j, const int width) {
+    return i * width + j;
 }
 
 void initTemp(float *T, int h, int w) {
     // Initializing the data with heat from top side
     // all other points at zero
-    for (int i = 0; i < w; i++)
-    {
+    for (int i = 0; i < w; i++) {
         T[i] = 100.0;
     }
 }
@@ -43,7 +43,7 @@ void write_pgm(FILE *f, float *img, int width, int height, int maxcolors) {
     for (int l = 0; l < height; l++) {
         for (int c = 0; c < width; c++) {
             int p = (l * width + c);
-            fprintf(f, "%d ", (int)(img[p]));
+            fprintf(f, "%d ", (int) (img[p]));
         }
         putc('\n', f);
     }
@@ -59,18 +59,17 @@ void writeTemp(float *T, int h, int w, int n) {
     save_png(T, h, w, filename, 'c');
 #else
     sprintf(filename, "heat_%06d.pgm", n);
-    FILE *f=fopen(filename, "w");
+    FILE *f = fopen(filename, "w");
     write_pgm(f, T, w, h, 100);
     fclose(f);
 #endif
 }
 
 double timedif(struct timespec *t, struct timespec *t0) {
-    return (t->tv_sec-t0->tv_sec)+1.0e-9*(double)(t->tv_nsec-t0->tv_nsec);
+    return (t->tv_sec - t0->tv_sec) + 1.0e-9 * (double) (t->tv_nsec - t0->tv_nsec);
 }
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
     const int nx = 100; // 200;   // Width of the area
     const int ny = 100; // 200;   // Height of the area
 
@@ -78,72 +77,101 @@ int main(int argc, char *argv[])
 
     const float h = 0.01; // 0.005;   // h=dx=dy  grid spacing
 
-    const float h2 = h*h;
+    const float h2 = h * h;
 
-    const float dt =  h2 / (4.0 * a); // Largest stable time step
+    const float dt = h2 / (4.0 * a); // Largest stable time step
     const int numSteps = 100000;      // Number of time steps to simulate (time=numSteps*dt)
     const int outputEvery = 100000;   // How frequently to write output image
 
-    int numElements = nx*ny;
+    int numElements = nx * ny;
 
     // Allocate two sets of data for current and next timesteps
-    float* Tn   = (float*)calloc(numElements, sizeof(float));
-    float* Tnp1 = (float*)calloc(numElements, sizeof(float));
+    float *Tn = (float *) calloc(numElements, sizeof(float));
+    float *Tnp1 = (float *) calloc(numElements, sizeof(float));
 
     // Initializing the data for T0
     initTemp(Tn, nx, ny);
 
     // Fill in the data on the next step to ensure that the boundaries are identical.
-    memcpy(Tnp1, Tn, numElements*sizeof(float));
-
-    printf("Simulated time: %g (%d steps of %g)\n", numSteps*dt, numSteps, dt);
-    printf("Simulated surface: %gx%g (in %dx%g divisions)\n", nx*h, ny*h, nx, h);
-    writeTemp(Tn, nx, ny, 0);
-
-    struct timespec t0, t;
-
-    /*start*/
-    clock_gettime(CLOCK_MONOTONIC, &t0);
+    memcpy(Tnp1, Tn, numElements * sizeof(float));
 
     int rank, size;
     MPI_Init(&argc, &argv);
-    MPI_Comm_size(MPI_COMM_WORLD , &size);
-    MPI_Comm_rank(MPI_COMM_WORLD , &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    struct timespec t0, t;
+    if (MASTER) {
+        printf("Simulated time: %g (%d steps of %g)\n", numSteps * dt, numSteps, dt);
+        printf("Simulated surface: %gx%g (in %dx%g divisions)\n", nx * h, ny * h, nx, h);
+        writeTemp(Tn, nx, ny, 0);
+
+        /*start*/
+        clock_gettime(CLOCK_MONOTONIC, &t0);
+    }
+
+    int iterPerNode = (nx + size - 1) / size;
+
+    printf("Process %d doing from [%d to %d[.\n", rank, rank * iterPerNode + 1, (1 + rank) * iterPerNode + 1);
+
+    ompi_status_public_t status;
 
     // Main loop
-    for (int n = 0; n <= numSteps; n++)
-    {
+    for (int n = 0; n <= numSteps; n++) {
         // Going through the entire area for one step
         // (borders stay at the same fixed temperatures)
-        for (int i = 1; i < nx-1; i++)
-        {
-            for (int j = 1; j < ny-1; j++)
-            {
+        int i;
+//        printf("starting at %d ; going to %d or %d \n", 1+rank*iterPerNode, (1 + rank)*iterPerNode, nx-1);
+        for (i = 1 + rank * iterPerNode; i < (1 + rank) * iterPerNode + 1 && i < nx - 1; i++) {
+            for (int j = 1; j < ny - 1; j++) {
                 const int index = getIndex(i, j, ny);
                 float tij = Tn[index];
-                float tim1j = Tn[getIndex(i-1, j, ny)];
-                float tijm1 = Tn[getIndex(i, j-1, ny)];
-                float tip1j = Tn[getIndex(i+1, j, ny)];
-                float tijp1 = Tn[getIndex(i, j+1, ny)];
+                float tim1j = Tn[getIndex(i - 1, j, ny)];
+                float tijm1 = Tn[getIndex(i, j - 1, ny)];
+                float tip1j = Tn[getIndex(i + 1, j, ny)];
+                float tijp1 = Tn[getIndex(i, j + 1, ny)];
 
-                Tnp1[index] = tij + a * dt * ( (tim1j + tip1j + tijm1 + tijp1 - 4.0*tij)/h2 );
+                Tnp1[index] = tij + a * dt * ((tim1j + tip1j + tijm1 + tijp1 - 4.0 * tij) / h2);
             }
         }
-        // Write the output if needed
-        if ((n+1) % outputEvery == 0)
-            writeTemp(Tnp1, nx, ny, n+1);
 
+        // Send top border to the top
+        if (rank != 0) {
+            MPI_Send(&Tnp1[getIndex(rank * iterPerNode + 1, 0, ny)], ny, MPI_FLOAT, rank - 1, 1, MPI_COMM_WORLD);
+            MPI_Recv(&Tnp1[getIndex(rank * iterPerNode, 0, ny)], ny, MPI_FLOAT, rank - 1, 1, MPI_COMM_WORLD, &status);
+        }
+
+        // Send bottom border to the bottom
+        if (rank != size - 1) {
+            MPI_Send(&Tnp1[getIndex(i - 1, 0, ny)], ny, MPI_FLOAT, rank + 1, 1, MPI_COMM_WORLD);
+            MPI_Recv(&Tnp1[getIndex(i, 0, ny)], ny, MPI_FLOAT, rank + 1, 1, MPI_COMM_WORLD, &status);
+        }
+
+        // Write the output if needed
+        if ((n + 1) % outputEvery == 0) {
+            if (MASTER) {
+                int off = i;
+                for (int rnk = 1; rnk < size; rnk++) {
+                    MPI_Recv(&Tnp1[getIndex(off, 0, ny)], ny * iterPerNode, MPI_FLOAT, rnk, 2, MPI_COMM_WORLD, &status);
+                    off += iterPerNode;
+                }
+                writeTemp(Tnp1, nx, ny, n + 1);
+            } else {
+                MPI_Send(&Tnp1[getIndex(1 + rank * iterPerNode, 0, ny)], ny * iterPerNode, MPI_FLOAT, 0, 2,
+                         MPI_COMM_WORLD);
+            }
+        }
         // Swapping the pointers for the next timestep
-        float* temp = Tn;
+        float *temp = Tn;
         Tn = Tnp1;
         Tnp1 = temp;
     }
 
-
-    /*end*/
-    clock_gettime(CLOCK_MONOTONIC, &t);
-    printf("It took %f seconds\n", timedif(&t, &t0));
-
+    if (MASTER) {
+        /*end*/
+        clock_gettime(CLOCK_MONOTONIC, &t);
+        printf("It took %f seconds\n", timedif(&t, &t0));
+    }
     MPI_Finalize();
 
     // Release the memory
