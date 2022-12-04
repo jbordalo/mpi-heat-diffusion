@@ -149,17 +149,9 @@ int main(int argc, char *argv[]) {
 
         // Write the output if needed
         if ((n + 1) % outputEvery == 0) {
-            if (MASTER) {
-                int off = i;
-                for (int rnk = 1; rnk < size; rnk++) {
-                    MPI_Recv(&Tnp1[getIndex(off, 0, ny)], ny * iterPerNode, MPI_FLOAT, rnk, 2, MPI_COMM_WORLD, &status);
-                    off += iterPerNode;
-                }
-                writeTemp(Tnp1, nx, ny, n + 1);
-            } else {
-                MPI_Send(&Tnp1[getIndex(1 + rank * iterPerNode, 0, ny)], ny * iterPerNode, MPI_FLOAT, 0, 2,
-                         MPI_COMM_WORLD);
-            }
+            MPI_Gather(&Tnp1[getIndex( rank * iterPerNode, 0, ny)], ny*iterPerNode, MPI_FLOAT,
+                       &Tnp1[0], ny*iterPerNode, MPI_FLOAT, 0, MPI_COMM_WORLD);
+            if (MASTER) writeTemp(Tnp1, nx, ny, n + 1);
         }
         // Swapping the pointers for the next timestep
         float *temp = Tn;
