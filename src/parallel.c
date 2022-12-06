@@ -127,7 +127,6 @@ int main(int argc, char *argv[]) {
 
     if (MASTER) iterPerNode += extra;
 
-    ompi_status_public_t status;
 
     const int offset = 1 + rank * iterPerNode + (MASTER ? 0 : extra);
 
@@ -155,13 +154,13 @@ int main(int argc, char *argv[]) {
         // Send top border to the top
         if (rank != 0) {
             MPI_Send(&Tnp1[getIndex(offset, 0, ny)], ny, MPI_FLOAT, rank - 1, 1, MPI_COMM_WORLD);
-            MPI_Recv(&Tnp1[getIndex(offset - 1, 0, ny)], ny, MPI_FLOAT, rank - 1, 1, MPI_COMM_WORLD, &status);
+            MPI_Recv(&Tnp1[getIndex(offset - 1, 0, ny)], ny, MPI_FLOAT, rank - 1, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
 
         // Send bottom border to the bottom
         if (rank != size - 1) {
             MPI_Send(&Tnp1[getIndex(i - 1, 0, ny)], ny, MPI_FLOAT, rank + 1, 1, MPI_COMM_WORLD);
-            MPI_Recv(&Tnp1[getIndex(i, 0, ny)], ny, MPI_FLOAT, rank + 1, 1, MPI_COMM_WORLD, &status);
+            MPI_Recv(&Tnp1[getIndex(i, 0, ny)], ny, MPI_FLOAT, rank + 1, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
 
         // Write the output if needed
