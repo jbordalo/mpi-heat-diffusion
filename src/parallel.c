@@ -163,19 +163,19 @@ int main(int argc, char *argv[]) {
             MPI_Recv(&Tnp1[getIndex(i, 0, ny)], ny, MPI_FLOAT, rank + 1, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
 
-        // Write the output if needed
-        if ((n + 1) % outputEvery == 0) {
-            // TODO sendcount might not need the ternary operator
-            MPI_Gatherv(&Tnp1[getIndex(offset - 1, 0, ny)], MASTER ? 0 : ny * iterPerNode, MPI_FLOAT,
-                        &Tnp1[0], recvcounts, displs, MPI_FLOAT, 0, MPI_COMM_WORLD);
-
-            if (MASTER) writeTemp(Tnp1, nx, ny, n + 1);
-        }
-
         // Swapping the pointers for the next timestep
         float *temp = Tn;
         Tn = Tnp1;
         Tnp1 = temp;
+
+        // Write the output if needed
+        if ((n + 1) % outputEvery == 0) {
+            MPI_Gatherv(&Tn[getIndex(offset - 1, 0, ny)], MASTER ? 0 : ny * iterPerNode, MPI_FLOAT,
+                        &Tn[0], recvcounts, displs, MPI_FLOAT, 0, MPI_COMM_WORLD);
+
+            if (MASTER) writeTemp(Tn, nx, ny, n + 1);
+        }
+
     }
 
     if (MASTER) {
