@@ -110,19 +110,36 @@ int main(int argc, char *argv[]) {
         clock_gettime(CLOCK_MONOTONIC, &t0);
     }
 
-    int iterPerNode = (nx + size - 1) / size;
+    int iterPerNode = nx / size;
+    int extra = nx % size;
 
-    printf("Process %d doing from [%d to %d[.\n", rank, rank * iterPerNode + 1, (1 + rank) * iterPerNode + 1);
+    int *recvcounts = malloc(size * sizeof(int));
+    int *displs = malloc(size * sizeof(int));
+
+    recvcounts[0] = 0;
+    displs[0] = 0;
+
+    int step = ny * iterPerNode;
+    for (int i = 1; i < size; i++) {
+        recvcounts[i] = step;
+        displs[i] = i * step + extra * ny;
+    }
+
+    if (MASTER) iterPerNode += extra;
 
     ompi_status_public_t status;
+
+    const int offset = 1 + rank * iterPerNode + (MASTER ? 0 : extra);
+
+    printf("Process %d doing from [%d to %d[.\n", rank, offset, offset + iterPerNode);
 
     // Main loop
     for (int n = 0; n <= numSteps; n++) {
         // Going through the entire area for one step
         // (borders stay at the same fixed temperatures)
+
         int i;
-//        printf("starting at %d ; going to %d or %d \n", 1+rank*iterPerNode, (1 + rank)*iterPerNode, nx-1);
-        for (i = 1 + rank * iterPerNode; i < (1 + rank) * iterPerNode + 1 && i < nx - 1; i++) {
+        for (i = offset; i < offset + iterPerNode && i < nx - 1; i++) {
             for (int j = 1; j < ny - 1; j++) {
                 const int index = getIndex(i, j, ny);
                 float tij = Tn[index];
@@ -137,8 +154,8 @@ int main(int argc, char *argv[]) {
 
         // Send top border to the top
         if (rank != 0) {
-            MPI_Send(&Tnp1[getIndex(rank * iterPerNode + 1, 0, ny)], ny, MPI_FLOAT, rank - 1, 1, MPI_COMM_WORLD);
-            MPI_Recv(&Tnp1[getIndex(rank * iterPerNode, 0, ny)], ny, MPI_FLOAT, rank - 1, 1, MPI_COMM_WORLD, &status);
+            MPI_Send(&Tnp1[getIndex(offset, 0, ny)], ny, MPI_FLOAT, rank - 1, 1, MPI_COMM_WORLD);
+            MPI_Recv(&Tnp1[getIndex(offset - 1, 0, ny)], ny, MPI_FLOAT, rank - 1, 1, MPI_COMM_WORLD, &status);
         }
 
         // Send bottom border to the bottom
@@ -149,10 +166,13 @@ int main(int argc, char *argv[]) {
 
         // Write the output if needed
         if ((n + 1) % outputEvery == 0) {
-            MPI_Gather(&Tnp1[getIndex( rank * iterPerNode, 0, ny)], ny*iterPerNode, MPI_FLOAT,
-                       &Tnp1[0], ny*iterPerNode, MPI_FLOAT, 0, MPI_COMM_WORLD);
+            // TODO sendcount might not need the ternary operator
+            MPI_Gatherv(&Tnp1[getIndex(offset - 1, 0, ny)], MASTER ? 0 : ny * iterPerNode, MPI_FLOAT,
+                        &Tnp1[0], recvcounts, displs, MPI_FLOAT, 0, MPI_COMM_WORLD);
+
             if (MASTER) writeTemp(Tnp1, nx, ny, n + 1);
         }
+
         // Swapping the pointers for the next timestep
         float *temp = Tn;
         Tn = Tnp1;
@@ -164,6 +184,7 @@ int main(int argc, char *argv[]) {
         clock_gettime(CLOCK_MONOTONIC, &t);
         printf("It took %f seconds\n", timedif(&t, &t0));
     }
+
     MPI_Finalize();
 
     // Release the memory
