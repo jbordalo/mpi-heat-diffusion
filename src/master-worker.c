@@ -71,12 +71,23 @@ double timedif(struct timespec *t, struct timespec *t0) {
 }
 
 int main(int argc, char *argv[]) {
-    const int nx = 100; // 200;   // Width of the area
-    const int ny = 100; // 200;   // Height of the area
+    int rank, size;
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    if (size < 2) {
+        printf("Need at least two nodes for a master-worker pattern.");
+        MPI_Finalize();
+        exit(0);
+    }
+
+    const int nx = 200;   // Width of the area
+    const int ny = 200;   // Height of the area
 
     const float a = 0.5;     // Diffusion constant
 
-    const float h = 0.01; // 0.005;   // h=dx=dy  grid spacing
+    const float h = 0.005;   // h=dx=dy  grid spacing
 
     const float h2 = h * h;
 
@@ -96,10 +107,6 @@ int main(int argc, char *argv[]) {
     // Fill in the data on the next step to ensure that the boundaries are identical.
     memcpy(Tnp1, Tn, numElements * sizeof(float));
 
-    int rank, size;
-    MPI_Init(&argc, &argv);
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
     struct timespec t0, t;
     if (MASTER) {
