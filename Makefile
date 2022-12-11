@@ -9,7 +9,7 @@ else
 
 endif
 
-all:    main parallel
+all:    main parallel master-worker master-worker-async
 
 main:	src/main.c $(OBJ)
 	cc -o main $(CFLAGS) $< $(OBJ) $(LDFLAGS)
@@ -17,5 +17,11 @@ main:	src/main.c $(OBJ)
 parallel: src/parallel.c $(OBJ)
 	mpicc -o parallel $(CFLAGS) $< $(OBJ) $(LDFLAGS)
 
+master-worker: src/master-worker.c $(OBJ)
+	mpicc -o master-worker $(CFLAGS) $< $(OBJ) $(LDFLAGS)
+
+master-worker-async: src/master-worker-async.c $(OBJ)
+	mpicc -o master-worker-async $(CFLAGS) $< $(OBJ) $(LDFLAGS)
+
 clean:
-	rm -f main parallel *.o
+	rm -f main parallel master-worker master-worker-async *.o
